@@ -49,6 +49,11 @@ module.exports = async (req, res) => {
         await sendMessage(chatId, SYMBOLS.join(', '));
         return res.status(200).send('OK');
       }
+
+      if (/^\/clear\b/.test(text)) {
+        await sendMessage(chatId, '✅ Sudah dibersihkan.');
+        return res.status(200).send('OK');
+      }
     }
 
     // Handle callback_query (button clicks)

@@ -14,6 +14,10 @@ function registerCommands(bot) {
     bot.sendMessage(msg.chat.id, SYMBOLS.join(", "));
   });
 
+  bot.onText(/\/clear/, (msg) => {
+    bot.sendMessage(msg.chat.id, ' Sudah dibersihkan.');
+  });
+
 }
 
 module.exports = { registerCommands };
