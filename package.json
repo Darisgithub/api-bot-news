@@ -1,0 +1,18 @@
+{
+  "dependencies": {
+    "axios": "^1.16.0",
+    "dotenv": "^17.4.2",
+    "node-telegram-bot-api": "^0.67.0"
+  },
+  "name": "bot-news",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/app.js"
+  },
+  "keywords": [],
+  "author": "daris",
+  "license": "ISC",
+  "type": "commonjs"
+}
