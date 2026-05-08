@@ -1,36 +1,77 @@
-const TelegramBot = require('node-telegram-bot-api');
+const axios = require('axios');
+const config = require('../src/config');
+const { SYMBOLS, TOKEN } = config;
+const { getPrice } = require('../src/services/priceServices');
+const { getNews } = require('../src/services/newsServices');
+const { formatPrice, formatNews } = require('../src/utils/formatter');
+
+const TELE_API = (method) => `https://api.telegram.org/bot${TOKEN}/${method}`;
+
+async function sendMessage(chatId, text, extra = {}) {
+  await axios.post(TELE_API('sendMessage'), {
+    chat_id: chatId,
+    text,
+    ...extra,
+  });
+}
+
+async function answerCallback(callbackId) {
+  try {
+    await axios.post(TELE_API('answerCallbackQuery'), { callback_query_id: callbackId });
+  } catch (e) {
+    // ignore
+  }
+}
 
 module.exports = async (req, res) => {
-  if (req.method !== 'POST') {
-    return res.status(200).send('OK');
-  }
-
-  const config = require('../src/config');
-  const { TOKEN } = config;
+  if (req.method !== 'POST') return res.status(200).send('OK');
 
   if (!TOKEN) {
     console.error('Missing TOKEN in environment');
     return res.status(500).send('Missing TOKEN');
   }
 
-  // Cache bot and handlers across invocations to avoid duplicate listeners
-  if (!global.__bot) {
-    const bot = new TelegramBot(TOKEN, { polling: false });
-    const { registerCommands } = require('../src/bot/commands');
-    const { registerHandlers } = require('../src/bot/handlers');
-
-    registerCommands(bot);
-    registerHandlers(bot);
-
-    global.__bot = bot;
-  }
+  const update = req.body || {};
 
   try {
-    const update = req.body;
-    await Promise.resolve(global.__bot.processUpdate(update));
+    // Handle message commands (/as, /list)
+    if (update.message && update.message.text) {
+      const text = update.message.text.trim();
+      const chatId = update.message.chat.id;
+
+      if (/^\/as\b/.test(text)) {
+        const keyboard = SYMBOLS.map((s) => [{ text: s, callback_data: s }]);
+        await sendMessage(chatId, 'Pilih saham:', { reply_markup: { inline_keyboard: keyboard } });
+        return res.status(200).send('OK');
+      }
+
+      if (/^\/list\b/.test(text)) {
+        await sendMessage(chatId, SYMBOLS.join(', '));
+        return res.status(200).send('OK');
+      }
+    }
+
+    // Handle callback_query (button clicks)
+    if (update.callback_query) {
+      const symbol = update.callback_query.data;
+      const chatId = update.callback_query.message.chat.id;
+      const callbackId = update.callback_query.id;
+
+      // acknowledge callback to stop loading
+      answerCallback(callbackId).catch(() => {});
+
+      const price = await getPrice(symbol);
+      const news = await getNews(symbol);
+
+      const msg = `\n${formatPrice(symbol, price)}\n\n📰 News:\n${formatNews(news)}`;
+
+      await sendMessage(chatId, msg);
+      return res.status(200).send('OK');
+    }
+
     return res.status(200).send('OK');
   } catch (err) {
-    console.error('Failed to process update:', err);
+    console.error('Webhook processing error:', err);
     return res.status(500).send('Error');
   }
 };
