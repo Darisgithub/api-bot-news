@@ -8,11 +8,19 @@ const { formatPrice, formatNews } = require('../src/utils/formatter');
 const TELE_API = (method) => `https://api.telegram.org/bot${TOKEN}/${method}`;
 
 async function sendMessage(chatId, text, extra = {}) {
-  await axios.post(TELE_API('sendMessage'), {
+  const res = await axios.post(TELE_API('sendMessage'), {
     chat_id: chatId,
     text,
     ...extra,
   });
+  // record sent message id
+  try {
+    const { addMessage } = require('../src/utils/messageStore');
+    if (res.data && res.data.result && res.data.result.message_id) {
+      addMessage(String(chatId), res.data.result.message_id).catch(() => {});
+    }
+  } catch (e) {}
+  return res;
 }
 
 async function answerCallback(callbackId) {
@@ -72,6 +80,23 @@ module.exports = async (req, res) => {
 
       await sendMessage(chatId, msg);
       return res.status(200).send('OK');
+    }
+
+    // handle /clear
+    if (update.message && update.message.text && /^\/clear\b/.test(update.message.text)) {
+      const chatId = update.message.chat.id;
+      try {
+        const msgs = await require('../src/utils/messageStore').getMessages(String(chatId));
+        for (const mid of msgs) {
+          try { await axios.post(TELE_API('deleteMessage'), { chat_id: chatId, message_id: mid }); } catch (e) {}
+        }
+        await require('../src/utils/messageStore').clearMessages(String(chatId));
+        await sendMessage(chatId, '✅ Sudah dibersihkan.');
+        return res.status(200).send('OK');
+      } catch (e) {
+        console.error('clear error', e);
+        return res.status(500).send('Error');
+      }
     }
 
     return res.status(200).send('OK');
